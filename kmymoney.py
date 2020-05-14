@@ -492,3 +492,30 @@ class KMyMoney:
                 p['paiement'] = -p['paiement']
 
             pl = p.plot(**params)
+
+    def price_history(self, accounts=None):
+        """
+        Return a pivot table with a price history for investment accounts
+        """
+        p = pd.read_sql(
+            f"""
+            WITH RECURSIVE
+            {self._price_history('EUR')},
+            {self._qaccount_name()}
+            SELECT priceDate as date, computedPrice as price,
+                qAccountName.accountName as name
+            FROM price_history,
+               qAccountName
+            WHERE 
+               qAccountName.currencyId = price_history.fromId
+               AND qAccountName.accountType = 15
+               {self._test_accounts('qAccountName', accounts)}
+            """,
+            self.sqlite,
+        )
+        return pd.pivot_table(
+            p,
+            values='price',
+            index=['date'],
+            columns=['name'],
+        )
