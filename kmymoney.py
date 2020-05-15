@@ -454,7 +454,7 @@ class KMyMoney:
                      ELSE NULL END) as paiement,
                (CASE WHEN destS.value <= 0 THEN -{self._to_float('destS.value')}
                      ELSE NULL END) as deposit,
-               {self._to_float('destS.value')} as amount
+               -{self._to_float('destS.value')} as amount
             FROM ({q}) s
                JOIN kmmSplits destS on
                   (s.transactionId = destS.transactionId
@@ -475,23 +475,29 @@ class KMyMoney:
         if not p.empty:
             # Group by category and sum the amounts
             p = p[['category'] + list(values)].groupby(['category']).sum()
-
             p = p.sort_values(values)
-            params = dict(
-                y=values,
-                kind=kind,
+            
+            if kind == 'pie':
+                params = dict(
+                    # no "y" parameter, this fails with pie plots
+                    autopct="%.2f%%",
+                    kind='pie',
+                    subplots=True,
+                )
+            else:
+                params = dict(
+                    y=values,
+                    kind=kind,
+                    subplots=subplots,
+                )
+            
+            p.plot(
+                **params,
                 title="{} - {}".format(mindate or "", maxdate or ""),
-                subplots=subplots,
                 legend=None,
                 figsize=(20, 10),
-                logy=False,
+                logy=False
             )
-            if kind == 'pie':
-                params['autopct'] = '%.2f%%'
-            if kind == 'bar' and 'paiement' in p.columns:
-                p['paiement'] = -p['paiement']
-
-            pl = p.plot(**params)
 
     def price_history(self, accounts=None):
         """
