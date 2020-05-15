@@ -51,6 +51,19 @@ class KMyMoney:
                WHERE kmmAccounts.parentId = qAccountName.accountId
         )
         """
+    
+    def accounts(self):
+        """
+        List all accounts
+        """
+        return pd.read_sql_query(
+            f"""
+            WITH RECURSIVE
+            {self._qaccount_name()}
+            SELECT * FROM qAccountName
+            """,
+            self.sqlite,
+        )
 
     def _to_float(self, fieldname):
         """
@@ -182,7 +195,7 @@ class KMyMoney:
             inc = "+1 MONTHS"
             formatted = "%Y-%m"
 
-        p = pd.read_sql(
+        p = pd.read_sql_query(
             f"""
         WITH RECURSIVE
 
@@ -389,7 +402,7 @@ class KMyMoney:
         test_min_date = "" if mindate is None else " AND s.date >= :mindate"
         q = self._query_detailed_splits(
             accounts=accounts, currency=currency, maxdate=maxdate)
-        return pd.read_sql(
+        return pd.read_sql_query(
             f"""
             WITH RECURSIVE {self._qaccount_name()}
             SELECT
@@ -422,6 +435,7 @@ class KMyMoney:
             self.sqlite,
             params={
                 "mindate": mindate,
+                "maxdate": maxdate,
             }
         )
 
@@ -467,14 +481,21 @@ class KMyMoney:
             self.sqlite,
             params={
                 "mindate": mindate,
+                "maxdate": maxdate,
                 "income": ACCOUNT_TYPE.INCOME,
                 "expense": ACCOUNT_TYPE.EXPENSE,
             }
         )
 
+        p = p[['category'] + list(values)].groupby(['category']).sum()
+        
+        # Unfortunately groupby() sometimes removes "nuisance columns"
+        for v in values:
+            if v not in p.columns:
+                p[v] = 0
+
         if not p.empty:
             # Group by category and sum the amounts
-            p = p[['category'] + list(values)].groupby(['category']).sum()
             p = p.sort_values(values)
             
             if kind == 'pie':
@@ -503,7 +524,7 @@ class KMyMoney:
         """
         Return a pivot table with a price history for investment accounts
         """
-        p = pd.read_sql(
+        p = pd.read_sql_query(
             f"""
             WITH RECURSIVE
             {self._price_history('EUR')},
@@ -519,6 +540,8 @@ class KMyMoney:
             """,
             self.sqlite,
         )
+        if p.empty:
+            return p
         return pd.pivot_table(
             p,
             values='price',
